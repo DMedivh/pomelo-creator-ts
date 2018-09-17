@@ -27,15 +27,15 @@ export enum MessageType {
     TYPE_PUSH = 3
 }
 
-function msgHasId(type) {
+function msgHasId(type: MessageType) {
     return type === MessageType.TYPE_REQUEST || type === MessageType.TYPE_RESPONSE;
 };
 
-function msgHasRoute(type) {
+function msgHasRoute(type: MessageType) {
     return type === MessageType.TYPE_REQUEST || type === MessageType.TYPE_NOTIFY || type === MessageType.TYPE_PUSH;
 };
 
-function caculateMsgIdBytes(id) {
+function caculateMsgIdBytes(id: number) {
     let len = 0;
     do {
         len += 1;
@@ -44,7 +44,7 @@ function caculateMsgIdBytes(id) {
     return len;
 };
 
-function encodeMsgFlag(type, compressRoute, buffer, offset, compressGzip) {
+function encodeMsgFlag(type: MessageType, compressRoute: number, buffer: Uint8Array, offset: number, compressGzip: boolean) {
     if (type !== MessageType.TYPE_REQUEST && type !== MessageType.TYPE_NOTIFY &&
         type !== MessageType.TYPE_RESPONSE && type !== MessageType.TYPE_PUSH) {
         throw new Error('unkonw message type: ' + type);
@@ -59,7 +59,7 @@ function encodeMsgFlag(type, compressRoute, buffer, offset, compressGzip) {
     return offset + MSG_FLAG_BYTES;
 };
 
-function encodeMsgId(id, buffer, offset) {
+function encodeMsgId(id: number, buffer: Uint8Array, offset: number) {
     do {
         let tmp = id % 128;
         const next = Math.floor(id / 128);
@@ -75,7 +75,17 @@ function encodeMsgId(id, buffer, offset) {
     return offset;
 };
 
-function encodeMsgRoute(compressRoute, route, buffer, offset) {
+function encodeMsgRouteByCompress(route: number, buffer: Uint8Array, offset: number) {
+    if (route > MSG_ROUTE_CODE_MAX) {
+        throw new Error('route number is overflow');
+    }
+
+    buffer[offset++] = (route >> 8) & 0xff;
+    buffer[offset++] = route & 0xff;
+    return offset
+}
+
+function encodeMsgRoute(compressRoute: number, route: any, buffer: Uint8Array, offset: number) {
     if (compressRoute) {
         if (route > MSG_ROUTE_CODE_MAX) {
             throw new Error('route number is overflow');
@@ -96,13 +106,13 @@ function encodeMsgRoute(compressRoute, route, buffer, offset) {
     return offset;
 };
 
-function encodeMsgBody(msg, buffer, offset) {
+function encodeMsgBody(msg: any, buffer: Uint8Array, offset: number) {
     copyArray(buffer, offset, msg, 0, msg.length);
     return offset + msg.length;
 };
 
 
-function copyArray(dest, doffset, src, soffset, length) {
+function copyArray(dest: Uint8Array, doffset: number, src: Uint8Array, soffset: number, length: number) {
     for (let index = 0; index < length; index++) {
         dest[doffset++] = src[soffset++];
     }
@@ -114,7 +124,7 @@ function copyArray(dest, doffset, src, soffset, length) {
  * msg message body
  * socketio current support string
  */
-export function strencode(str) {
+export function strencode(str: string) {
     const byteArray = new Uint8Array(str.length * 3);
     let offset = 0;
     for (let i = 0; i < str.length; i++) {
@@ -142,7 +152,7 @@ export function strencode(str) {
    * msg String data
    * return Message Object
    */
-export function strdecode(buffer) {
+export function strdecode(buffer: any) {
     const bytes = new Uint8Array(buffer);
     const array = [];
     let offset = 0;
@@ -188,7 +198,7 @@ export namespace Package {
      * @param  {ByteArray} body   body content in bytes
      * @return {ByteArray}        new byte array that contains encode result
      */
-    export function encode(type, body?) {
+    export function encode(type: number, body?: Uint8Array) {
         let length = body ? body.length : 0;
         const buffer = new Uint8Array(PKG_HEAD_BYTES + length);
         let index = 0;
@@ -239,7 +249,7 @@ export namespace Message {
      * @param  {Buffer} msg           message body bytes
      * @return {Buffer}               encode result
      */
-    export function encode(id, type, compressRoute, route, msg, compressGzip) {
+    export function encode(id: number, type: MessageType, compressRoute: number, route: any, msg: any, compressGzip: boolean) {
         // caculate message max length
         const idBytes = msgHasId(type) ? caculateMsgIdBytes(id) : 0;
         let msgLen = MSG_FLAG_BYTES + idBytes;
@@ -296,7 +306,7 @@ export namespace Message {
      * @param  {Uint8Array} buffer message bytes
      * @return {Object}            message object
      */
-    export function decode(buffer) {
+    export function decode(buffer: Uint8Array) {
         var bytes = new Uint8Array(buffer);
         var bytesLen = bytes.length || bytes.byteLength;
         var offset = 0;

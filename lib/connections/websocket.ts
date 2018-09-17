@@ -7,7 +7,7 @@ export class websocketImpl extends ConnectionBase {
     protected uri: url.UrlObjectCommon;
     protected autoReconnect: boolean = true;
 
-    protected socket: WebSocket;
+    protected socket: WebSocket | null = null;
     constructor(uri: string, opts: any) {
         super();
 
@@ -96,6 +96,8 @@ export class websocketImpl extends ConnectionBase {
         if (!this.connected) {
             return Promise.reject('socket hanup!');
         }
-        this.socket.send(binary);
+        if (this.socket) {
+            this.socket.send(binary);
+        }
     }
 }

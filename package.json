@@ -1,6 +1,6 @@
 {
   "name": "pomelo-creator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "",
   "main": "pomelo.js",
   "scripts": {
@@ -28,7 +28,6 @@
     "is": "^3.2.1",
     "moment": "^2.22.2",
     "protobufjs": "^6.8.8",
-    "redis": "^2.8.0",
     "url": "^0.11.0",
     "util": "^0.11.0"
   }

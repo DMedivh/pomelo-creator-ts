@@ -1,10 +1,12 @@
 
 import { EventEmitter } from "eventemitter3";
 import * as is from 'is';
-import * as moment from 'moment';
+
 
 import { strdecode, Message, MessageType, Package, PackageType, strencode } from "./protocol";
 import { init, encode, decode } from "./protobuf";
+
+const moment = require('moment');
 
 
 export const handshakeBuffer = {
@@ -24,13 +26,14 @@ enum RESULT_CODE {
 }
 
 export class ConnectionBase extends EventEmitter {
-    public id: string;
-    protected protoVersion: string;
+    public id: string = 'default';
+    protected protoVersion: string = '';
     protected serverProtos: any = {};
     protected clientProtos: any = {};
     protected dict: any = {};
     protected routeMap: any = {};
     protected abbrs: any = {};
+
     protected encode: Function | undefined;
     protected decode: Function | undefined;
     protected maxReconnectAttempts: number = 10;
@@ -39,19 +42,20 @@ export class ConnectionBase extends EventEmitter {
     protected heartbeatTimeout: number = 0;
     protected nextHeartbeatTimeout: number = 0;
 
-    protected heartbeatTimeoutId: NodeJS.Timer;
-    protected heartbeatId: NodeJS.Timer;
+    protected heartbeatTimeoutId: NodeJS.Timer | null = null;
+    protected heartbeatId: NodeJS.Timer | null = null;
     protected callbacks: any = {};
 
     protected reqId: number = 0;
 
     protected auth_route: string = 'connector.session.connect';
     constructor() {
+
         super();
     }
 
     public setItem(key: string, value?: any, ttl?: number) {
-        const localStorage = window ? window.localStorage : cc.sys.localStorage;
+        const localStorage = window ? window.localStorage : undefined;
         if (!localStorage) {
             console.error("找不到本地存储 api localStorage!");
             return;
@@ -68,7 +72,7 @@ export class ConnectionBase extends EventEmitter {
     }
 
     public getItem(key: string) {
-        const localStorage = window ? window.localStorage : cc.sys.localStorage;
+        const localStorage = window ? window.localStorage : undefined;
         if (!localStorage) {
             console.error("找不到本地存储 api localStorage!");
             return;
@@ -182,9 +186,11 @@ export class ConnectionBase extends EventEmitter {
         }
         this.reqId++;
 
-        const body = this.encode(this.reqId, route, msg);
-        if (body) {
-            await this.send(Package.encode(PackageType.TYPE_DATA, body));
+        if (this.encode) {
+            const body = this.encode(this.reqId, route, msg);
+            if (body) {
+                await this.send(Package.encode(PackageType.TYPE_DATA, body));
+            }
         }
         return await new Promise((resolve, reject) => {
             this.callbacks[this.reqId] = { resolve, reject };
@@ -212,9 +218,11 @@ export class ConnectionBase extends EventEmitter {
             });
         }
 
-        const body = this.encode(0, route, msg);
-        if (body) {
-            await this.send(Package.encode(PackageType.TYPE_DATA, body));
+        if (this.encode) {
+            const body = this.encode(0, route, msg);
+            if (body) {
+                await this.send(Package.encode(PackageType.TYPE_DATA, body));
+            }
         }
     }
 
@@ -234,11 +242,10 @@ export class ConnectionBase extends EventEmitter {
         if (this.clientProtos[route]) {
             msg = encode(route, msg);
         } else {
-
             msg = strdecode(JSON.stringify(msg));
         }
 
-        return Message.encode(reqId, reqId ? MessageType.TYPE_REQUEST : MessageType.TYPE_NOTIFY, !!this.dict[route], this.dict[route], msg, {});
+        return Message.encode(reqId, reqId ? MessageType.TYPE_REQUEST : MessageType.TYPE_NOTIFY, this.dict[route], this.dict[route], msg, false);
     }
 
     protected defaultDecode(data: any) {
@@ -250,7 +257,7 @@ export class ConnectionBase extends EventEmitter {
                 return;
             }
         }
-        msg.body = function (msg: any) {
+        const canver = (msg: any) => {
             let route = msg.route;
             //Decompose route from dict
             if (msg.compressRoute) {
@@ -265,7 +272,8 @@ export class ConnectionBase extends EventEmitter {
             } else {
                 return JSON.parse(strdecode(msg.body));
             }
-        }.bind(this)(msg);
+        }
+        msg.body = canver(msg);
         return msg;
     }
 
@@ -275,7 +283,7 @@ export class ConnectionBase extends EventEmitter {
     }
 
     protected async send(binary: any) {
-        return Promise.reject('un-implements connection!');
+
     }
 
     protected async reset() {
