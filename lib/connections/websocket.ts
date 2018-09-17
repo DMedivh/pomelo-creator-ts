@@ -1,4 +1,4 @@
-import {ConnectionBase} from "../connection";
+import { ConnectionBase } from "../connection";
 import * as url from 'url';
 import * as is from 'is';
 
@@ -17,9 +17,6 @@ export class websocketImpl extends ConnectionBase {
         if (!this.socket) {
             return 0;
         }
-        if (this.socket.CLOSING || this.socket.CLOSED) {
-            return 0;
-        }
         return this.socket.OPEN;
     }
 
@@ -30,7 +27,7 @@ export class websocketImpl extends ConnectionBase {
         return this.socket.CONNECTING;
     }
 
-    public async connect(opts: any) {
+    public async connect(opts: any = {}) {
         super.connect(opts);
 
         if (this.uri.protocol === 'wss:') {
@@ -101,9 +98,6 @@ export class websocketImpl extends ConnectionBase {
     }
 
     public async send(binary: any) {
-        if (!this.connected) {
-            return Promise.reject('socket hanup!');
-        }
         if (this.socket) {
             this.socket.send(binary);
         }
