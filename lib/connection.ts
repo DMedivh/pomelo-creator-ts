@@ -36,7 +36,6 @@ export class ConnectionBase extends EventEmitter {
 
     protected encode: Function | undefined;
     protected decode: Function | undefined;
-    protected maxReconnectAttempts: number = 10;
 
     protected heartbeatInterval: number = 0;
     protected heartbeatTimeout: number = 0;
@@ -48,10 +47,22 @@ export class ConnectionBase extends EventEmitter {
 
     protected reqId: number = 0;
 
-    protected auth_route: string = 'connector.session.connect';
+    protected auth: Function | null = null;
+
+    protected autoReconnect: boolean = true;
     constructor() {
 
         super();
+
+        this.on('reconnect', () => {
+            if (!this.autoReconnect) {
+                return;
+            }
+            if (this.connected || this.connectting) {
+                return;
+            }
+            this.connect();
+        });
     }
 
     public setItem(key: string, value?: any, ttl?: number) {
@@ -116,21 +127,17 @@ export class ConnectionBase extends EventEmitter {
      * 
      * @param opts 
      */
-    public async connect(opts: any) {
+    public async connect(opts: any = {}) {
         if (this.connectting) {
             return Promise.reject('connecting');
         }
 
+        if (opts.auth) {
+            this.auth = opts.auth;
+        }
+
         this.encode = opts.encode || this.defaultEncode;
         this.decode = opts.decode || this.defaultDecode;
-
-        if (opts.auth_route) {
-            this.auth_route = opts.auth_route;
-        }
-
-        if (opts.maxReconnectAttempts) {
-            this.maxReconnectAttempts = opts.maxReconnectAttempts;
-        }
 
         const protos = this.getItem('protos');
         if (protos) {
@@ -145,26 +152,6 @@ export class ConnectionBase extends EventEmitter {
         }
     }
 
-    public async auth(certificate?: string, auto?: boolean) {
-        if (!certificate) {
-            certificate = this.getItem('certificate');
-        }
-        if (certificate) {
-            return;
-        }
-        const ok = await this.request(this.auth_route, { certificate }).catch(err => {
-            this.setItem('certificate');
-        });
-        if (ok) {
-            this.emit('ready');
-            if (auto) {
-                /// 每次登陆成功缓存证书一周
-                this.setItem('certificate', certificate, 7 * 24 * 60);
-            }
-        }
-        return ok;
-    }
-
     /**
      * 向服务器发起一个请求, 并等待完成后的返回值
      * 
@@ -173,7 +160,10 @@ export class ConnectionBase extends EventEmitter {
      * @returns {Promise<object>} 
      */
     public async request(route: string, msg: any = {}) {
-        if (this.connectting || !this.connected) {
+        if (!this.connected) {
+            if (!this.connectting) {
+                return Promise.reject('socket hanup!');
+            }
             await new Promise((resolve, reject) => {
                 const timer = setTimeout(reject, 5000);
                 this.once('ready', () => {
@@ -184,6 +174,7 @@ export class ConnectionBase extends EventEmitter {
                 });
             });
         }
+
         this.reqId++;
 
         if (this.encode) {
@@ -206,7 +197,10 @@ export class ConnectionBase extends EventEmitter {
      * @returns {Promise<void>}
      */
     public async notify(route: string, msg: any = {}) {
-        if (this.connectting || !this.connected) {
+        if (!this.connected) {
+            if (!this.connectting) {
+                return Promise.reject('socket hanup!');
+            }
             await new Promise((resolve, reject) => {
                 const timer = setTimeout(reject, 5000);
                 this.once('ready', () => {
@@ -286,10 +280,6 @@ export class ConnectionBase extends EventEmitter {
 
     }
 
-    protected async reset() {
-
-    }
-
     protected async clear() {
         this.setItem('certificate');
     }
@@ -349,10 +339,11 @@ export class ConnectionBase extends EventEmitter {
 
                         this.send(Package.encode(PackageType.TYPE_HANDSHAKE_ACK));
                         this.emit('connected');
-
-                        const ok: any = await this.auth();
-                        if (ok && ok.code !== 200) {
-                            this.clear();
+                        if (this.auth) {
+                            const ok: any = await this.auth();
+                            if (ok && ok.code !== 200) {
+                                this.clear();
+                            }
                         }
                     }
                     break;

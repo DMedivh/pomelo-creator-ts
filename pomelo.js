@@ -30,7 +30,8 @@ var pomelo;
         if (!pomelo.connection) {
             return Promise.reject(`un-implements connectin by protocol ${uri_desc.protocol}`);
         }
-        return await pomelo.connection.connect(opts);
+        await pomelo.connection.connect(opts);
+        return pomelo.connection;
     }
     pomelo.create = create;
 })(pomelo = exports.pomelo || (exports.pomelo = {}));

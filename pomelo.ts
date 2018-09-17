@@ -6,11 +6,15 @@ export namespace pomelo {
 
     export let connection: ConnectionBase;
 
-    export declare interface options {
+    export declare interface Options {
         id?: string;
+        auth(): PromiseLike<any>;
+        encode?(reqId: number, route: string, msg: any): Uint8Array;
+        decode?(data: string | Uint8Array): string | undefined;
+        autoReconnect?: boolean;
     }
 
-    export async function create(uri: string, opts: any) {
+    export async function create(uri: string, opts: Options) {
         const uri_desc: url.UrlWithStringQuery = url.parse(uri);
         switch (uri_desc.protocol) {
             case 'ws:':
@@ -29,6 +33,7 @@ export namespace pomelo {
         if (!connection) {
             return Promise.reject(`un-implements connectin by protocol ${uri_desc.protocol}`);
         }
-        return await connection.connect(opts);
+        await connection.connect(opts);
+        return connection;
     }
 }

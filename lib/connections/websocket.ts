@@ -5,17 +5,12 @@ import * as is from 'is';
 
 export class websocketImpl extends ConnectionBase {
     protected uri: url.UrlObjectCommon;
-    protected autoReconnect: boolean = true;
-
     protected socket: WebSocket | null = null;
     constructor(uri: string, opts: any) {
         super();
 
         this.id = opts.id || 'default';
         this.uri = url.parse(uri);
-        if (!is.undefined(opts.autoReconnect)) {
-            this.autoReconnect = !!opts.autoReconnect;
-        }
     }
 
     public get connected() {
@@ -70,6 +65,12 @@ export class websocketImpl extends ConnectionBase {
         this.socket.onclose = (event) => {
             console.warn('websocket closed');
             this.emit('disconnected', event);
+
+            if (this.autoReconnect) {
+                setTimeout(() => {
+                    this.emit('reconnect');
+                }, 1000);
+            }
         }
 
         await new Promise((resolve, reject) => {
