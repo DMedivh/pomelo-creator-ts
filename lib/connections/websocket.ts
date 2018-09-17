@@ -70,8 +70,10 @@ export class websocketImpl extends ConnectionBase {
         this.socket.onclose = (event) => {
             console.warn('websocket closed');
             this.emit('disconnected', event);
-
+            delete this.socket;
+            this.socket = null;
             if (this.autoReconnect) {
+
                 setTimeout(() => {
                     this.emit('reconnect');
                 }, 1000);
