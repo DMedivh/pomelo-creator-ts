@@ -17,6 +17,9 @@ export class websocketImpl extends ConnectionBase {
         if (!this.socket) {
             return 0;
         }
+        if (this.socket.CLOSING || this.socket.CLOSED) {
+            return 0;
+        }
         return this.socket.OPEN;
     }
 
