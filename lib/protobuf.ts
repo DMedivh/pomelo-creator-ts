@@ -25,6 +25,8 @@ export function init(opts: any) {
 
   //On the serverside, user clientProtos to decode messages receive from clients
   decoder.init(opts.decoderProtos);
+
+  console.log("初始化 protobuf", opts);
 };
 
 export function encode(key: string, msg: any) {

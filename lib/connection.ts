@@ -55,6 +55,7 @@ export class ConnectionBase extends EventEmitter {
         super();
 
         this.on('reconnect', () => {
+            console.log("socket reconnect!", this.autoReconnect, this.connected, this.connectting);
             if (!this.autoReconnect) {
                 return;
             }
@@ -72,9 +73,11 @@ export class ConnectionBase extends EventEmitter {
             return;
         }
         if (is.empty(value)) {
+            console.log("removeItem", key);
             localStorage.removeItem(key);
         } else {
             if (!!ttl) {
+                console.log("本地存储", key);
                 localStorage.setItem(key, JSON.stringify({ value, expireat: moment().add(ttl, 'minute').format('YYYY-MM-DD hh:mm:dd') }));
             } else {
                 localStorage.setItem(`connection.cookie.${this.id}.${key}`, JSON.stringify({ value }));
@@ -98,13 +101,16 @@ export class ConnectionBase extends EventEmitter {
                 const expireat = moment(data.expireat);
                 if (expireat.isValid() && expireat.isBefore(moment())) {
                     this.setItem(key);
+                    console.log("获取本地参数", key, "已经失效!", data);
                     return;
                 }
             }
         }
         if (data && data.value) {
+            console.log("获取本地数据", key, data);
             return data.value;
         }
+        console.log("找不到本地配置", key);
         return;
     }
 
@@ -129,6 +135,7 @@ export class ConnectionBase extends EventEmitter {
      */
     public async connect(opts: any = {}) {
         if (this.connectting) {
+            console.error("当前连接正在连接中...");
             return Promise.reject('connecting');
         }
 
@@ -177,12 +184,13 @@ export class ConnectionBase extends EventEmitter {
 
         this.reqId++;
 
-        if (this.encode) {
+        if (!!this.encode && is.function(this.encode)) {
             const body = this.encode(this.reqId, route, msg);
             if (body) {
                 await this.send(Package.encode(PackageType.TYPE_DATA, body));
             }
         }
+        console.log("request", route, msg);
         return await new Promise((resolve, reject) => {
             this.callbacks[this.reqId] = { resolve, reject };
             this.routeMap[this.reqId] = route;
@@ -218,6 +226,7 @@ export class ConnectionBase extends EventEmitter {
                 await this.send(Package.encode(PackageType.TYPE_DATA, body));
             }
         }
+        console.log('notify ', route, msg);
     }
 
     public async disconnect() {
@@ -300,11 +309,13 @@ export class ConnectionBase extends EventEmitter {
                     {
                         const body = JSON.parse(strdecode(msg.body));
                         if (body.code === RESULT_CODE.RES_OLD_CLIENT) {
+                            console.error('client version not fullfill');
                             this.emit('error', 'client version not fullfill');
                             return;
                         }
 
                         if (body.code !== RESULT_CODE.RES_OK) {
+                            console.error(`handshake failed by ${body.code}`);
                             this.emit('error', `handshake failed by ${body.code}`);
                             return;
                         }
@@ -339,9 +350,11 @@ export class ConnectionBase extends EventEmitter {
 
                         this.send(Package.encode(PackageType.TYPE_HANDSHAKE_ACK));
                         this.emit('connected');
-                        if (this.auth) {
+                        if (!!this.auth && is.function(this.auth)) {
+                            console.log("连接完成,开始自动鉴定身份...");
                             const ok: any = await this.auth();
                             if (ok && ok.code !== 200) {
+                                console.log("连接鉴定身份失败,开始清理本地 cookie!");
                                 this.clear();
                             }
                         }
@@ -349,6 +362,7 @@ export class ConnectionBase extends EventEmitter {
                     break;
                 case PackageType.TYPE_HEARTBEAT:
                     {
+                        console.log("处理心跳消息!");
                         if (!this.heartbeatInterval || this.heartbeatId) {
                             return;
                         }
@@ -376,6 +390,7 @@ export class ConnectionBase extends EventEmitter {
                         }
 
                         if (!body.id) {
+                            console.log("收到服务器推送消息:", body.route, body.body);
                             this.emit(body.route, body.body);
                             return;
                         }
@@ -383,11 +398,13 @@ export class ConnectionBase extends EventEmitter {
                         if (this.callbacks[body.id]) {
                             this.callbacks[body.id].resolve(body.body);
                             delete this.callbacks[body.id];
+                            console.log("请求消息返回:", body.id, body.body);
                         }
                     }
                     break;
                 case PackageType.TYPE_KICK:
                     {
+                        console.warn("服务器主动断开连接", JSON.parse(strdecode(msg.body)));
                         this.emit('onKick', JSON.parse(strdecode(msg.body)));
                     }
                     break;
