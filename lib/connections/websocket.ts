@@ -1,11 +1,11 @@
-
-import { ConnectionBase } from "../connection";
+import {ConnectionBase} from "../connection";
 import * as url from 'url';
 import * as is from 'is';
 
 export class websocketImpl extends ConnectionBase {
     protected uri: url.UrlObjectCommon;
     protected socket: WebSocket | null = null;
+
     constructor(uri: string, opts: any) {
         super();
 
@@ -31,8 +31,10 @@ export class websocketImpl extends ConnectionBase {
         super.connect(opts);
 
         if (this.uri.protocol === 'wss:') {
+            console.log("使用 ssh 连接初始化 websocket ", this.uri);
             this.socket = new WebSocket(url.format(this.uri));
         } else if (this.uri.protocol === 'ws:') {
+            console.log("创建 websocket", this.uri);
             this.socket = new WebSocket(url.format(this.uri));
         } else {
             return Promise.reject(new Error(`un-support protocol ${this.uri.protocol} for websocket!`));
