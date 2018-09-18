@@ -8,7 +8,7 @@ export namespace pomelo {
 
     export declare interface Options {
         id?: string;
-        auth(): PromiseLike<any>;
+        auth(): PromiseLike<boolean>;
         encode?(reqId: number, route: string, msg: any): Uint8Array;
         decode?(data: string | Uint8Array): string | undefined;
         autoReconnect?: boolean;

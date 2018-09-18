@@ -350,10 +350,13 @@ export class ConnectionBase extends EventEmitter {
 
                         this.send(Package.encode(PackageType.TYPE_HANDSHAKE_ACK));
                         this.emit('connected');
+
                         if (!!this.auth && is.function(this.auth)) {
                             console.log("连接完成,开始自动鉴定身份...");
-                            const ok: any = await this.auth();
-                            if (ok && ok.code !== 200) {
+                            const ok: boolean = await this.auth();
+                            if (ok) {
+                                this.emit('ready');
+                            } else {
                                 console.log("连接鉴定身份失败,开始清理本地 cookie!");
                                 this.clear();
                             }
