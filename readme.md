@@ -9,6 +9,8 @@
         import { pomelo } from "pomelo-creator";
 
         pomelo.create('ws://127.0.0.1:3010',{
+
+            /// 注意 auth 函数是一个 promise 方法
             auth:async(){
                 /// 这是一个自动对连接鉴权的函数,
                 /// 例如: 
@@ -16,9 +18,14 @@
                 const sessionId = pomelo.connection.getItem("sessionId");
                 if( sessionId ){
                     /// 这里的路由方法需要在服务器实现(相当于一个断线重连恢复玩家服务器数据的功能)
-                    pomelo.connection.request("connector.session.auth",{ sessionId });
+                    const ok = await pomelo.connection.request("connector.session.auth",{ sessionId });
+                    if( !ok ){
+                        pomelo.connection.setItem('sessionId',undefined);
+                    }
                 }
             }
+        }).then((session)=>{
+            console.log("连接完成");
         });
 
         pomelo.connection.on('error',()=>{
