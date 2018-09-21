@@ -1,10 +1,9 @@
-
-import { EventEmitter } from "eventemitter3";
+import {EventEmitter} from "eventemitter3";
 import * as is from 'is';
 
 
-import { strdecode, Message, MessageType, Package, PackageType, strencode } from "./protocol";
-import { init, encode, decode } from "./protobuf";
+import {strdecode, Message, MessageType, Package, PackageType, strencode} from "./protocol";
+import {init, encode, decode} from "./protobuf";
 
 const moment = require('moment');
 
@@ -47,9 +46,12 @@ export class ConnectionBase extends EventEmitter {
 
     protected reqId: number = 0;
 
-    protected auth: Function | null = null;
+    public auth: () => Promise<boolean> = async function () {
+        return false
+    };
 
     protected autoReconnect: boolean = true;
+
     constructor() {
 
         super();
@@ -78,9 +80,12 @@ export class ConnectionBase extends EventEmitter {
         } else {
             if (!!ttl) {
                 console.log("本地存储", key);
-                localStorage.setItem(key, JSON.stringify({ value, expireat: moment().add(ttl, 'minute').format('YYYY-MM-DD hh:mm:dd') }));
+                localStorage.setItem(key, JSON.stringify({
+                    value,
+                    expireat: moment().add(ttl, 'minute').format('YYYY-MM-DD hh:mm:dd')
+                }));
             } else {
-                localStorage.setItem(`connection.cookie.${this.id}.${key}`, JSON.stringify({ value }));
+                localStorage.setItem(`connection.cookie.${this.id}.${key}`, JSON.stringify({value}));
             }
         }
     }
@@ -130,8 +135,8 @@ export class ConnectionBase extends EventEmitter {
 
     /**
      * 发起连接初始化,并等待完成, 如果超时会触发 Promise.reject
-     * 
-     * @param opts 
+     *
+     * @param opts
      */
     public async connect(opts: any = {}) {
         if (this.connectting) {
@@ -161,10 +166,10 @@ export class ConnectionBase extends EventEmitter {
 
     /**
      * 向服务器发起一个请求, 并等待完成后的返回值
-     * 
-     * @param {string}route 
+     *
+     * @param {string}route
      * @param {object}msg
-     * @returns {Promise<object>} 
+     * @returns {Promise<object>}
      */
     public async request(route: string, msg: any = {}) {
         if (!this.connected) {
@@ -192,16 +197,16 @@ export class ConnectionBase extends EventEmitter {
         }
         console.log("request", route, msg);
         return await new Promise((resolve, reject) => {
-            this.callbacks[this.reqId] = { resolve, reject };
+            this.callbacks[this.reqId] = {resolve, reject};
             this.routeMap[this.reqId] = route;
         });
     }
 
     /**
      * 通知服务器 --不关心返回值
-     * 
+     *
      * @param {string}route 消息rpc路由
-     * @param {object}msg 消息内容, 默认值 {} 
+     * @param {object}msg 消息内容, 默认值 {}
      * @returns {Promise<void>}
      */
     public async notify(route: string, msg: any = {}) {
@@ -289,10 +294,6 @@ export class ConnectionBase extends EventEmitter {
 
     }
 
-    protected async clear() {
-        this.setItem('certificate');
-    }
-
     protected async processPackage(data: any) {
         let msgs: any = Package.decode(data);
         if (!msgs) {
@@ -305,111 +306,104 @@ export class ConnectionBase extends EventEmitter {
         for (let i in msgs) {
             const msg = msgs[i];
             switch (msg.type) {
-                case PackageType.TYPE_HANDSHAKE:
-                    {
-                        const body = JSON.parse(strdecode(msg.body));
-                        if (body.code === RESULT_CODE.RES_OLD_CLIENT) {
-                            console.error('client version not fullfill');
-                            this.emit('error', 'client version not fullfill');
-                            return;
-                        }
+                case PackageType.TYPE_HANDSHAKE: {
+                    const body = JSON.parse(strdecode(msg.body));
+                    if (body.code === RESULT_CODE.RES_OLD_CLIENT) {
+                        console.error('client version not fullfill');
+                        this.emit('error', 'client version not fullfill');
+                        return;
+                    }
 
-                        if (body.code !== RESULT_CODE.RES_OK) {
-                            console.error(`handshake failed by ${body.code}`);
-                            this.emit('error', `handshake failed by ${body.code}`);
-                            return;
-                        }
+                    if (body.code !== RESULT_CODE.RES_OK) {
+                        console.error(`handshake failed by ${body.code}`);
+                        this.emit('error', `handshake failed by ${body.code}`);
+                        return;
+                    }
 
-                        if (body.sys && body.sys.heartbeat) {
-                            this.heartbeatInterval = body.sys.heartbeat * 1000;
-                            this.heartbeatTimeout = this.heartbeatInterval * 5;
-                        } else {
-                            this.heartbeatInterval = 0;
-                            this.heartbeatTimeout = 0;
-                        }
+                    if (body.sys && body.sys.heartbeat) {
+                        this.heartbeatInterval = body.sys.heartbeat * 1000;
+                        this.heartbeatTimeout = this.heartbeatInterval * 5;
+                    } else {
+                        this.heartbeatInterval = 0;
+                        this.heartbeatTimeout = 0;
+                    }
 
-                        this.dict = body.sys.dict;
-                        if (this.dict) {
-                            this.abbrs = {};
-                            for (let i in this.dict) {
-                                this.abbrs[this.dict[i]] = i;
-                            }
-                        }
-
-                        if (body.sys.protos) {
-                            this.protoVersion = body.sys.protos.version || '';
-                            this.serverProtos = body.sys.protos.server || {};
-                            this.clientProtos = body.sys.protos.client || {};
-
-                            this.setItem('protos', body.sys.protos);
-                            init({
-                                encoderProtos: this.clientProtos,
-                                decoderProtos: this.serverProtos
-                            });
-                        }
-
-                        this.send(Package.encode(PackageType.TYPE_HANDSHAKE_ACK));
-                        this.emit('connected');
-
-                        if (!!this.auth && is.function(this.auth)) {
-                            console.log("连接完成,开始自动鉴定身份...");
-                            const ok: boolean = await this.auth();
-                            if (ok) {
-                                this.emit('ready');
-                            } else {
-                                console.log("连接鉴定身份失败,开始清理本地 cookie!");
-                                this.clear();
-                            }
+                    this.dict = body.sys.dict;
+                    if (this.dict) {
+                        this.abbrs = {};
+                        for (let i in this.dict) {
+                            this.abbrs[this.dict[i]] = i;
                         }
                     }
+
+                    if (body.sys.protos) {
+                        this.protoVersion = body.sys.protos.version || '';
+                        this.serverProtos = body.sys.protos.server || {};
+                        this.clientProtos = body.sys.protos.client || {};
+
+                        this.setItem('protos', body.sys.protos);
+                        init({
+                            encoderProtos: this.clientProtos,
+                            decoderProtos: this.serverProtos
+                        });
+                    }
+
+                    this.send(Package.encode(PackageType.TYPE_HANDSHAKE_ACK));
+                    this.emit('connected');
+
+                    if (!!this.auth && is.function(this.auth)) {
+                        console.log("连接完成,开始自动鉴定身份...");
+                        const ok: boolean = await this.auth();
+                        if (ok) {
+                            this.emit('ready');
+                        }
+                    }
+                }
                     break;
-                case PackageType.TYPE_HEARTBEAT:
-                    {
-                        console.log("处理心跳消息!");
-                        if (!this.heartbeatInterval || this.heartbeatId) {
-                            return;
-                        }
-                        if (this.heartbeatTimeoutId) {
-                            clearTimeout(this.heartbeatTimeoutId);
-                            this.heartbeatTimeoutId = null;
-                        }
-                        this.heartbeatId = setTimeout(() => {
-                            this.heartbeatId = null;
-                            this.send(Package.encode(PackageType.TYPE_HEARTBEAT));
-
-                            this.nextHeartbeatTimeout = Date.now() + this.heartbeatTimeout;
-                            this.heartbeatTimeoutId = setTimeout(() => {
-                                this.emit('timeout');
-                                this.disconnect();
-                            }, this.heartbeatTimeout);
-                        }, this.heartbeatInterval);
+                case PackageType.TYPE_HEARTBEAT: {
+                    console.log("处理心跳消息!");
+                    if (!this.heartbeatInterval || this.heartbeatId) {
+                        return;
                     }
+                    if (this.heartbeatTimeoutId) {
+                        clearTimeout(this.heartbeatTimeoutId);
+                        this.heartbeatTimeoutId = null;
+                    }
+                    this.heartbeatId = setTimeout(() => {
+                        this.heartbeatId = null;
+                        this.send(Package.encode(PackageType.TYPE_HEARTBEAT));
+
+                        this.nextHeartbeatTimeout = Date.now() + this.heartbeatTimeout;
+                        this.heartbeatTimeoutId = setTimeout(() => {
+                            this.emit('timeout');
+                            this.disconnect();
+                        }, this.heartbeatTimeout);
+                    }, this.heartbeatInterval);
+                }
                     break;
-                case PackageType.TYPE_DATA:
-                    {
-                        let body = null;
-                        if (!!this.decode) {
-                            body = this.decode(msg.body);
-                        }
-
-                        if (!body.id) {
-                            console.log("收到服务器推送消息:", body.route, body.body);
-                            this.emit(body.route, body.body);
-                            return;
-                        }
-
-                        if (this.callbacks[body.id]) {
-                            this.callbacks[body.id].resolve(body.body);
-                            delete this.callbacks[body.id];
-                            console.log("请求消息返回:", body.id, body.body);
-                        }
+                case PackageType.TYPE_DATA: {
+                    let body = null;
+                    if (!!this.decode) {
+                        body = this.decode(msg.body);
                     }
+
+                    if (!body.id) {
+                        console.log("收到服务器推送消息:", body.route, body.body);
+                        this.emit(body.route, body.body);
+                        return;
+                    }
+
+                    if (this.callbacks[body.id]) {
+                        this.callbacks[body.id].resolve(body.body);
+                        delete this.callbacks[body.id];
+                        console.log("请求消息返回:", body.id, body.body);
+                    }
+                }
                     break;
-                case PackageType.TYPE_KICK:
-                    {
-                        console.warn("服务器主动断开连接", JSON.parse(strdecode(msg.body)));
-                        this.emit('onKick', JSON.parse(strdecode(msg.body)));
-                    }
+                case PackageType.TYPE_KICK: {
+                    console.warn("服务器主动断开连接", JSON.parse(strdecode(msg.body)));
+                    this.emit('onKick', JSON.parse(strdecode(msg.body)));
+                }
                     break;
                 default:
                     console.error('un-support protocol', msg);
