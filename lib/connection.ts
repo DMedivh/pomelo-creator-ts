@@ -26,6 +26,7 @@ enum RESULT_CODE {
 
 export class ConnectionBase extends EventEmitter {
     public id: string = 'default';
+
     protected protoVersion: string = '';
     protected serverProtos: any = {};
     protected clientProtos: any = {};
@@ -253,7 +254,7 @@ export class ConnectionBase extends EventEmitter {
             msg = strdecode(JSON.stringify(msg));
         }
 
-        return Message.encode(reqId, reqId ? MessageType.TYPE_REQUEST : MessageType.TYPE_NOTIFY, this.dict[route], this.dict[route], msg, false);
+        return Message.encode(reqId, reqId ? MessageType.TYPE_REQUEST : MessageType.TYPE_NOTIFY, this.dict[route], this.dict[route], msg);
     }
 
     protected defaultDecode(data: any) {

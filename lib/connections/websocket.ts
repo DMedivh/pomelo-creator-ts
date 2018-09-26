@@ -1,6 +1,5 @@
 import { ConnectionBase } from "../connection";
 import * as url from 'url';
-import * as is from 'is';
 
 export class websocketImpl extends ConnectionBase {
     protected uri: url.UrlObjectCommon;
