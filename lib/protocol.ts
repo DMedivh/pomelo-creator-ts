@@ -149,8 +149,6 @@ export enum MessageType {
 
 export namespace Message {
 
-
-
     /**
      * Message protocol encode.
      *

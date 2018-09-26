@@ -29,6 +29,7 @@ export function decode(key: string, msg: any) {
  * constants
  */
 namespace constants {
+
     export const TYPES: any = {
         uInt32: 0,
         sInt32: 0,
@@ -252,7 +253,7 @@ namespace MsgEncoder {
 
     export function encode(route: any, msg: any) {
         //Get protos from protos map use the route as key
-        var proto = protos[route];
+        const proto = protos[route];
 
         //Check msg
         if (!checkMsg(msg, proto)) {

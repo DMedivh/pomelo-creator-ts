@@ -12,7 +12,8 @@ export const handshakeBuffer = {
     sys: {
         type: 'COCOS_CREATOR',
         version: '1.0.0',
-        rsa: {}
+        rsa: {},
+        protoVersion: ''
     },
     user: {}
 };
@@ -70,6 +71,7 @@ export class ConnectionBase extends EventEmitter {
     }
 
     public setItem(key: string, value?: any, ttl?: number) {
+        console.log('更新本地缓存:', key, value);
         const localStorage = window ? window.localStorage : undefined;
         if (!localStorage) {
             console.error("找不到本地存储 api localStorage!");
@@ -149,8 +151,10 @@ export class ConnectionBase extends EventEmitter {
             this.auth = opts.auth;
         }
 
-        this.encode = opts.encode || this.defaultEncode;
-        this.decode = opts.decode || this.defaultDecode;
+        handshakeBuffer.user = opts.user || {};
+
+        this.encode = opts.encode || this.defaultEncode.bind(this);
+        this.decode = opts.decode || this.defaultDecode.bind(this);
 
         const protos = this.getItem('protos');
         if (protos) {
@@ -163,6 +167,10 @@ export class ConnectionBase extends EventEmitter {
                 decoderProtos: this.serverProtos
             });
         }
+        handshakeBuffer.sys.protoVersion = this.protoVersion;
+        this.once('handshake', () => {
+            this.send(Package.encode(PackageType.TYPE_HANDSHAKE, strencode(JSON.stringify(handshakeBuffer))));
+        });
     }
 
     /**
@@ -196,7 +204,6 @@ export class ConnectionBase extends EventEmitter {
                 await this.send(Package.encode(PackageType.TYPE_DATA, body));
             }
         }
-        console.log("request", route, msg);
         return await new Promise((resolve, reject) => {
             this.callbacks[this.reqId] = {resolve, reject};
             this.routeMap[this.reqId] = route;
@@ -248,6 +255,7 @@ export class ConnectionBase extends EventEmitter {
     }
 
     protected defaultEncode(reqId: number, route: string, msg: any = {}) {
+        console.log("defaultEncode ", reqId, route);
         if (this.clientProtos[route]) {
             msg = encode(route, msg);
         } else {
@@ -286,17 +294,59 @@ export class ConnectionBase extends EventEmitter {
         return msg;
     }
 
-    protected async handshake(buffer?: any) {
-        const binary = Package.encode(PackageType.TYPE_HANDSHAKE, buffer ? strencode(JSON.stringify(buffer)) : undefined);
-        return await this.send(binary);
+    protected async handshake(data: any) {
+        data = JSON.parse(strdecode(data));
+        if (data.code === RESULT_CODE.RES_OLD_CLIENT) {
+            this.emit('error', 'client version not fullfill');
+            return;
+        }
+
+        if (data.code !== RESULT_CODE.RES_OK) {
+            console.error(`handshake failed by ${data.code}`);
+            this.emit('error', `handshake failed by ${data.code}`);
+            return;
+        }
+        if (data.sys && data.sys.heartbeat) {
+            this.heartbeatInterval = data.sys.heartbeat * 1000;   // heartbeat interval
+            this.heartbeatTimeout = this.heartbeatInterval * 5;        // max heartbeat timeout
+        } else {
+            this.heartbeatInterval = 0;
+            this.heartbeatTimeout = 0;
+        }
+
+        this.dict = data.sys.dict;
+        const protos = data.sys.protos;
+
+        //Init compress dict
+        if (this.dict) {
+            this.abbrs = {};
+
+            for (let route in this.dict) {
+                this.abbrs[this.dict[route]] = route;
+            }
+        }
+
+        //Init protobuf protos
+        if (protos) {
+            this.protoVersion = protos.version || 0;
+            this.serverProtos = protos.server || {};
+            this.clientProtos = protos.client || {};
+
+            //Save protobuf protos to localStorage
+            this.setItem('protos', JSON.stringify(protos));
+
+            init({encoderProtos: protos.client, decoderProtos: protos.server});
+        }
+        this.send(Package.encode(PackageType.TYPE_HANDSHAKE_ACK));
     }
 
     protected async send(binary: any) {
-
+        console.log("发送网络消息:", binary.length);
     }
 
     protected async processPackage(data: any) {
         let msgs: any = Package.decode(data);
+        console.log("解析消息:", msgs);
         if (!msgs) {
             return this.disconnect();
         }
@@ -306,54 +356,12 @@ export class ConnectionBase extends EventEmitter {
 
         for (let i in msgs) {
             const msg = msgs[i];
+            console.log("处理消息:", msg.type);
             switch (msg.type) {
                 case PackageType.TYPE_HANDSHAKE: {
-                    const body = JSON.parse(strdecode(msg.body));
-                    if (body.code === RESULT_CODE.RES_OLD_CLIENT) {
-                        console.error('client version not fullfill');
-                        this.emit('error', 'client version not fullfill');
-                        return;
-                    }
-
-                    if (body.code !== RESULT_CODE.RES_OK) {
-                        console.error(`handshake failed by ${body.code}`);
-                        this.emit('error', `handshake failed by ${body.code}`);
-                        return;
-                    }
-
-                    if (body.sys && body.sys.heartbeat) {
-                        this.heartbeatInterval = body.sys.heartbeat * 1000;
-                        this.heartbeatTimeout = this.heartbeatInterval * 5;
-                    } else {
-                        this.heartbeatInterval = 0;
-                        this.heartbeatTimeout = 0;
-                    }
-
-                    this.dict = body.sys.dict;
-                    if (this.dict) {
-                        this.abbrs = {};
-                        for (let i in this.dict) {
-                            this.abbrs[this.dict[i]] = i;
-                        }
-                    }
-
-                    if (body.sys.protos) {
-                        this.protoVersion = body.sys.protos.version || '';
-                        this.serverProtos = body.sys.protos.server || {};
-                        this.clientProtos = body.sys.protos.client || {};
-
-                        this.setItem('protos', body.sys.protos);
-                        init({
-                            encoderProtos: this.clientProtos,
-                            decoderProtos: this.serverProtos
-                        });
-                    }
-
-                    this.send(Package.encode(PackageType.TYPE_HANDSHAKE_ACK));
+                    await this.handshake(msg.body);
                     this.emit('connected');
-
                     if (!!this.auth && is.function(this.auth)) {
-                        console.log("连接完成,开始自动鉴定身份...");
                         const ok: boolean = await this.auth();
                         if (ok) {
                             this.emit('ready');
@@ -362,7 +370,6 @@ export class ConnectionBase extends EventEmitter {
                 }
                     break;
                 case PackageType.TYPE_HEARTBEAT: {
-                    console.log("处理心跳消息!");
                     if (!this.heartbeatInterval || this.heartbeatId) {
                         return;
                     }

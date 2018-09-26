@@ -1,5 +1,6 @@
-import { ConnectionBase } from "../connection";
+import {ConnectionBase} from "../connection";
 import * as url from 'url';
+
 
 export class websocketImpl extends ConnectionBase {
     protected uri: url.UrlObjectCommon;
@@ -42,6 +43,7 @@ export class websocketImpl extends ConnectionBase {
         this.socket.binaryType = 'arraybuffer';
 
         this.socket.onmessage = (event) => {
+            console.log("收到消息:", event);
             this.processPackage(event.data);
         }
 
@@ -52,15 +54,7 @@ export class websocketImpl extends ConnectionBase {
         }
 
         this.socket.onopen = () => {
-            this.handshake({
-                'sys': {
-                    type: 'COCOS_CREATOR_CLIENT',
-                    version: opts.version || '1.0.0',
-                    rsa: {},
-                    protoVersion: this.protoVersion
-                },
-                'user': opts.user || {}
-            });
+            this.emit('handshake');
         };
 
         this.socket.onclose = (event) => {
