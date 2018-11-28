@@ -10,6 +10,8 @@ export namespace pomelo {
 
         disconnec(code?: number, reason?: string): void;
 
+        auth(): Promise<object>;
+
         on(event: 'error', fn: EventEmitter.ListenerFn): void;
         on(event: 'connected', fn: EventEmitter.ListenerFn): void;
         on(event: 'ready', fn: EventEmitter.ListenerFn): void;
@@ -30,7 +32,7 @@ export namespace pomelo {
     export interface Option {
 
         /// 认证 鉴权 成功返回 true, 失败 false
-        auth(): Promise<boolean>;
+        auth(): Promise<object>;
 
         /// 本地缓存对象
         localStorage: {
