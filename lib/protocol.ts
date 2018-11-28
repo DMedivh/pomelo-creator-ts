@@ -134,7 +134,7 @@ export namespace Package {
             const body = length ? new Uint8Array(length) : null;
             copyArray(body, 0, bytes, offset, length);
             offset += length;
-            rs.push({'type': type, 'body': body});
+            rs.push({ 'type': type, 'body': body });
         }
         return rs.length === 1 ? rs[0] : rs;
     };
