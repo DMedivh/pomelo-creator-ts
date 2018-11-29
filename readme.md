@@ -25,6 +25,9 @@
 
         import { pomelo } from "pomelo-creator";
 
+        /// 这里 可 create 多个 client 对象, 代表多个socket 链接.
+        /// url 参数 可指定为 wss 协议, 对应服务器请挂一个 ssl 证书, 这里不建议使用 node 挂 ssl 证书, 
+        /// 可使用 nginx 做 websocket 反向代理, 在 nginx 上做 ssl加解密!
         const client = pomelo.create("ws://127.0.0.1:9527", {
             auth: async function () {
                 const accessToken: string = localStorage.getItem('accessToken');
